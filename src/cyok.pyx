@@ -8,32 +8,32 @@ import array
 
 cdef extern from "okFrontPanelDLL.h":
     int okFrontPanelDLL_LoadLib(const char *libname)
-    void okFrontPanelDLL_FreeLib(void)
+    void okFrontPanelDLL_FreeLib()
     void okFrontPanelDLL_GetVersion(char *date, char *time)
         
     cdef cppclass okCFrontPanel:
         enum ErrorCode:
             NoError,
-	    Failed,
-	    Timeout,
-	    DoneNotHigh,
-	    TransferError,
-	    CommunicationError,
-	    InvalidBitstream,
-	    FileError,
-	    DeviceNotOpen,
-	    InvalidEndpoint,
-	    InvalidBlockSize,
-	    I2CRestrictedAddress,
-	    I2CBitError,
-	    I2CNack,
-	    I2CUnknownStatus,
-	    UnsupportedFeature,
-	    FIFOUnderflow,
-	    FIFOOverflow,
-	    DataAlignmentError,
-	    InvalidResetProfile,
-	    InvalidParameter
+            Failed,
+            Timeout,
+            DoneNotHigh,
+            TransferError,
+            CommunicationError,
+            InvalidBitstream,
+            FileError,
+            DeviceNotOpen,
+            InvalidEndpoint,
+            InvalidBlockSize,
+            I2CRestrictedAddress,
+            I2CBitError,
+            I2CNack,
+            I2CUnknownStatus,
+            UnsupportedFeature,
+            FIFOUnderflow,
+            FIFOOverflow,
+            DataAlignmentError,
+            InvalidResetProfile,
+            InvalidParameter
     
         okCFrontPanel()
 
@@ -98,12 +98,12 @@ cdef array.array char_arr_template = array.array('B')
 
         
 def load_library(libname=None):
-    if libname is None:
-        success = okFrontPanelDLL_LoadLib(None)
-    else:
-        cdef char * name_bytes = libname.encode()
-        success = okFrontPanelDLL_LoadLib(name_bytes)
+    cdef char * name_bytes = None
+    if libname is not None:
+        temp = libname.encode()
+        name_bytes = temp
 
+    success = okFrontPanelDLL_LoadLib(name_bytes)
     if not success:
         raise ValueError('Cannot load FrontPanel DLL.')
 
@@ -113,10 +113,12 @@ def free_library():
 
 
 def get_version():
-    cdef char * date[32]
-    cdef char * time[32]
+    cdef char date[32]
+    cdef char time[32]
     okFrontPanelDLL_GetVersion(date, time)
-    return date.decode(), time.decode()
+    py_date = date.decode()
+    py_time = time.decode()
+    return py_date, py_time
 
 
 cdef class PyFrontPanel:
@@ -137,7 +139,8 @@ cdef class PyFrontPanel:
             raise ValueError(cls.get_error_string(err_code))
     
     def open_by_serial(self, name=''):
-        cdef string name_bytes = name.encode()
+        temp = name.encode()
+        cdef string name_bytes = temp
         cdef int err_code = self.c_okfp.OpenBySerial(name_bytes)
         self.check_error(err_code)
         return err_code
@@ -146,12 +149,13 @@ cdef class PyFrontPanel:
         self.c_okfp.Close()
     
     def load_default_pll_configuration(self):
-        cdef int err_code = self.c_okfp.LoadDefaultPllConfiguration()
+        cdef int err_code = self.c_okfp.LoadDefaultPLLConfiguration()
         self.check_error(err_code)
         return err_code
         
     def configure_fpga(self, file_name):
-        cdef string name_bytes = file_name.encode()
+        temp = file_name.encode()
+        cdef string name_bytes = temp
         cdef int err_code = self.c_okfp.ConfigureFPGA(name_bytes)
         self.check_error(err_code)
         return err_code
@@ -174,24 +178,24 @@ cdef class PyFrontPanel:
         cdef int val = self.c_okfp.GetWireOutValue(ep_addr)
         return val
 
-    def read_from_block_pipe_out(int ep_addr, int block_size, long length):
+    def read_from_block_pipe_out(self, int ep_addr, int block_size, long length):
         cdef array.array arr
         arr = array.clone(char_arr_template, length, False)
         cdef long num_bytes = self.c_okfp.ReadFromBlockPipeOut(ep_addr, block_size, length,
                                                                arr.data.as_uchars)
         if num_bytes < 0:
-            self.check_error((int)num_bytes)
+            self.check_error(<int>num_bytes)
             return None
         else:
             array.resize(arr, num_bytes)
             return arr
 
-    def read_from_pipe_out(int ep_addr, long length):
+    def read_from_pipe_out(self, int ep_addr, long length):
         cdef array.array arr
         arr = array.clone(char_arr_template, length, False)
         cdef long num_bytes = self.c_okfp.ReadFromPipeOut(ep_addr, length, arr.data.as_uchars)
         if num_bytes < 0:
-            self.check_error((int)num_bytes)
+            self.check_error(<int>num_bytes)
             return None
         else:
             array.resize(arr, num_bytes)
@@ -214,7 +218,7 @@ cdef class PyFrontPanel:
         return err_code
 
     def update_wire_outs(self):
-        cdef int err_code = self.c_okfp.UpdateWireIns()
+        cdef int err_code = self.c_okfp.UpdateWireOuts()
         return err_code
 
     def write_to_block_pipe_in(self, int ep_addr, int block_size, object arr):

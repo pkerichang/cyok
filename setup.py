@@ -7,7 +7,7 @@ setup(
                                     sources=['src/cyok.pyx'],
                                     language='c++',
                                     include_dirs=['include'],
-                                    libraries=['okFrontPanel', 'dl'],
+                                    libraries=['okFrontPanel'],
                                     library_dirs=['lib'],
                                     )
     )
