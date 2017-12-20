@@ -3,6 +3,9 @@
 from libcpp.string cimport string
 from libcpp cimport bool
 
+from cpython cimport array
+import array
+
 cdef extern from "okFrontPanelDLL.h":
     int okFrontPanelDLL_LoadLib(const char *libname)
     void okFrontPanelDLL_FreeLib(void)
@@ -91,6 +94,9 @@ cdef extern from "okFrontPanelDLL.h":
         ErrorCode RemoveCustomDevice(int productID)
 
 
+cdef array.array char_arr_template = array.array('B')
+
+        
 def load_library(libname=None):
     if libname is None:
         success = okFrontPanelDLL_LoadLib(None)
@@ -120,28 +126,106 @@ cdef class PyFrontPanel:
 
     @classmethod
     def get_error_string(cls, int err_code):
-        return okCFrontPanel.GetErrorString(err_code).decode()
+        cdef string msg = okCFrontPanel.GetErrorString(err_code)
+        return msg.decode()
 
     @classmethod
     def check_error(cls, int err_code):
         # NOTE: Technically, we should check against okCFrontPanel::ErrorCode.NoError,
         # but I cannot figure out how to expose inner enums to Cython.
-        if err_code != 0:
+        if err_code < 0:
             raise ValueError(cls.get_error_string(err_code))
     
     def open_by_serial(self, name=''):
         cdef string name_bytes = name.encode()
-        err_code = self.c_okfp.OpenBySerial(name_bytes)
+        cdef int err_code = self.c_okfp.OpenBySerial(name_bytes)
         self.check_error(err_code)
+        return err_code
 
+    def close(self):
+        self.c_okfp.Close()
+    
     def load_default_pll_configuration(self):
-        return self.c_okfp.LoadDefaultPllConfiguration()
-
+        cdef int err_code = self.c_okfp.LoadDefaultPllConfiguration()
+        self.check_error(err_code)
+        return err_code
+        
     def configure_fpga(self, file_name):
         cdef string name_bytes = file_name.encode()
-        err_code = self.c_okfp.ConfigureFPGA(name_bytes)
+        cdef int err_code = self.c_okfp.ConfigureFPGA(name_bytes)
         self.check_error(err_code)
-
+        return err_code
+        
     def is_front_panel_enabled(self):
-        return self.c_okfp.IsFrontPanelEnabled()
+        cdef bool enabled = self.c_okfp.IsFrontPanelEnabled()
+        return enabled
 
+    def is_open(self):
+        cdef bool opened = self.c_okfp.IsOpen()
+        return opened
+    
+    def get_wire_in_value(self, int ep_addr):
+        cdef unsigned int val
+        cdef int err_code = self.c_okfp.GetWireInValue(ep_addr, &val)
+        self.check_error(err_code)
+        return val
+
+    def get_wire_out_value(self, int ep_addr):
+        cdef int val = self.c_okfp.GetWireOutValue(ep_addr)
+        return val
+
+    def read_from_block_pipe_out(int ep_addr, int block_size, long length):
+        cdef array.array arr
+        arr = array.clone(char_arr_template, length, False)
+        cdef long num_bytes = self.c_okfp.ReadFromBlockPipeOut(ep_addr, block_size, length,
+                                                               arr.data.as_uchars)
+        if num_bytes < 0:
+            self.check_error((int)num_bytes)
+            return None
+        else:
+            array.resize(arr, num_bytes)
+            return arr
+
+    def read_from_pipe_out(int ep_addr, long length):
+        cdef array.array arr
+        arr = array.clone(char_arr_template, length, False)
+        cdef long num_bytes = self.c_okfp.ReadFromPipeOut(ep_addr, length, arr.data.as_uchars)
+        if num_bytes < 0:
+            self.check_error((int)num_bytes)
+            return None
+        else:
+            array.resize(arr, num_bytes)
+            return arr
+        
+    def set_wire_in_value(self, int ep, unsigned int val, unsigned int mask=0xffffffff):
+        cdef int err_code = self.c_okfp.SetWireInValue(ep, val, mask)
+        return err_code
+
+    def activate_trigger_in(self, int ep_addr, int bit):
+        cdef int err_code = self.c_okfp.ActivateTriggerIn(ep_addr, bit)
+        return err_code
+    
+    def update_trigger_outs(self):
+        cdef int err_code = self.c_okfp.UpdateTriggerOuts()
+        return err_code
+    
+    def update_wire_ins(self):
+        cdef int err_code = self.c_okfp.UpdateWireIns()
+        return err_code
+
+    def update_wire_outs(self):
+        cdef int err_code = self.c_okfp.UpdateWireIns()
+        return err_code
+
+    def write_to_block_pipe_in(self, int ep_addr, int block_size, object arr):
+        cdef long length = len(arr)
+        cdef int err_code = self.c_okfp.WriteToBlockPipeIn(ep_addr, block_size, length,
+                                                           arr.data.as_uchars)
+        return err_code
+
+    def write_to_pipe_in(self, int ep_addr, object arr):
+        cdef long length = len(arr)
+        cdef int err_code = self.c_okfp.WriteToPipeIn(ep_addr, length, arr.data.as_uchars)
+        return err_code
+        
+    
