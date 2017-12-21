@@ -255,6 +255,10 @@ cdef class PyFrontPanel:
         cdef bool enabled = self.c_okfp.IsFrontPanelEnabled()
         return enabled
 
+    def is_front_panel_3_supported(self):
+        cdef bool supported = self.c_okfp.IsFrontPanel3Supported()
+        return supported
+
     def is_open(self):
         cdef bool opened = self.c_okfp.IsOpen()
         return opened
