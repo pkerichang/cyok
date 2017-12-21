@@ -6,3 +6,4 @@ __pycache__/
 # general files
 *~
 .DS_Store
+build
