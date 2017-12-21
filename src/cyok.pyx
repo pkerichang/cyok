@@ -226,6 +226,10 @@ cdef class PyFrontPanel:
         self.check_error(err_code)
         return err_code
 
+    def reset_fpga(self):
+        cdef int err_code = self.c_okfp.ResetFPGA()
+        return err_code
+
     def close(self):
         self.c_okfp.Close()
 
@@ -273,6 +277,10 @@ cdef class PyFrontPanel:
         cdef int val = self.c_okfp.GetWireOutValue(ep_addr)
         return val
 
+    def is_triggered(self, int ep_addr, unsigned int mask):
+        cdef bool ans = self.c_okfp.IsTriggered(ep_addr, mask)
+        return ans
+    
     def read_from_block_pipe_out(self, int ep_addr, int block_size, long length):
         cdef array.array arr
         arr = array.clone(char_arr_template, length, False)
