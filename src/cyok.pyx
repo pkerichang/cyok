@@ -6,10 +6,45 @@ from libcpp cimport bool
 from cpython cimport array
 import array
 
+from collections import namedtuple
+
 cdef extern from "okFrontPanelDLL.h":
     int okFrontPanelDLL_LoadLib(const char *libname)
     void okFrontPanelDLL_FreeLib()
     void okFrontPanelDLL_GetVersion(char *date, char *time)
+
+    cdef cppclass okTFlashLayout:
+        unsigned int sectorCount
+        unsigned int sectorSize
+        unsigned int pageSize
+        unsigned int minUserSector
+        unsigned int maxUserSector
+    
+    cdef cppclass okTDeviceInfo:
+        char * deviceID
+        char * serialNumber
+        char * productName
+        int productID
+        int deviceInterface
+        int usbSpeed
+        int deviceMajorVersion
+        int deviceMinorVersion
+        int hostInterfaceMajorVersion
+        int hostInterfaceMinorVersion
+        bool isPLL22150Supported
+        bool isFrontPanelEnabled
+        int wireWidth
+        int triggerWidth
+        int pipeWidth
+        int registerAddressWidth
+        int registerDataWidth
+
+        okTFlashLayout flashSystem
+        okTFlashLayout flashFPGA
+
+        bool hasFMCEEPROM
+        bool hasResetProfiles
+    
         
     cdef cppclass okCFrontPanel:
         enum ErrorCode:
@@ -44,7 +79,7 @@ cdef extern from "okFrontPanelDLL.h":
         void EnableAsynchronousTransfers(bool enable)
 
         int GetDeviceCount()
-        string GetDeviceID()
+        ErrorCode GetDeviceInfo(okTDeviceInfo * info)
         
         string GetDeviceListSerial(int num)
         int GetDeviceMajorVersion()
@@ -96,9 +131,19 @@ cdef extern from "okFrontPanelDLL.h":
 
 cdef array.array char_arr_template = array.array('B')
 
-        
+PyTFlashLayout = namedtuple('PyTFlashLayout', ['sectorCount', 'sectorSize', 'pageSize',
+                                               'minUserSector', 'maxUserSector'])
+
+PyTDeviceInfo = namedtuple('PyTDeviceInfo', ['deviceID', 'serialNumber', 'productName', 'productID',
+                                             'deviceInterface', 'usbSpeed', 'deviceMajorVersion',
+                                             'deviceMinorVersion', 'hostInterfaceMajorVersion',
+                                             'hostInterfaceMinorVersion', 'isPLL22150Supported',
+                                             'isFrontPanelEnabled', 'wireWidth', 'triggerWidth',
+                                             'pipeWidth', 'registerAddressWidth', 'registerDataWidth',
+                                             'flashSystem', 'flashFPGA', 'hasFMCEEPROM', 'hasResetProfiles'])
+
 def load_library(libname=None):
-    cdef char * name_bytes = None
+    cdef char * name_bytes = NULL
     if libname is not None:
         temp = libname.encode()
         name_bytes = temp
@@ -121,6 +166,42 @@ def get_version():
     return py_date, py_time
 
 
+cdef convert_TFlashLayout(okTFlashLayout * layout):
+    return PyTFlashLayout(sectorCount=layout[0].sectorCount,
+                          sectorSize=layout[0].sectorSize,
+                          pageSize=layout[0].pageSize,
+                          minUserSector=layout[0].minUserSector,
+                          maxUserSector=layout[0].maxUserSector,
+    )
+
+
+cdef convert_TDeviceInfo(okTDeviceInfo * info):
+    cdef char * dev_id = info[0].deviceID
+    cdef char * serial_num = info[0].serialNumber
+    cdef char * prod_name = info[0].productName
+    return PyTDeviceInfo(deviceID=dev_id.decode(),
+                         serialNumber=serial_num.decode(),
+                         productName=prod_name.decode(),
+                         productID=info[0].productID,
+                         deviceInterface=info[0].deviceInterface,
+                         usbSpeed=info[0].usbSpeed,
+                         deviceMajorVersion=info[0].deviceMajorVersion,
+                         deviceMinorVersion=info[0].deviceMinorVersion,
+                         hostInterfaceMajorVersion=info[0].hostInterfaceMajorVersion,
+                         hostInterfaceMinorVersion=info[0].hostInterfaceMinorVersion,
+                         isPLL22150Supported=info[0].isPLL22150Supported,
+                         isFrontPanelEnabled=info[0].isFrontPanelEnabled,
+                         wireWidth=info[0].wireWidth,
+                         triggerWidth=info[0].triggerWidth,
+                         pipeWidth=info[0].pipeWidth,
+                         registerAddressWidth=info[0].registerAddressWidth,
+                         registerDataWidth=info[0].registerDataWidth,
+                         flashSystem=convert_TFlashLayout(&(info[0].flashSystem)),
+                         flashFPGA=convert_TFlashLayout(&(info[0].flashFPGA)),
+                         hasFMCEEPROM=info[0].hasFMCEEPROM,
+                         hasResetProfiles=info[0].hasResetProfiles,
+    )
+
 cdef class PyFrontPanel:
     cdef okCFrontPanel c_okfp
     def __init__(self):
@@ -136,7 +217,7 @@ cdef class PyFrontPanel:
         # NOTE: Technically, we should check against okCFrontPanel::ErrorCode.NoError,
         # but I cannot figure out how to expose inner enums to Cython.
         if err_code < 0:
-            raise ValueError(cls.get_error_string(err_code))
+            raise ValueError('error code = %d, msg: %s' % (err_code, cls.get_error_string(err_code)))
     
     def open_by_serial(self, name=''):
         temp = name.encode()
@@ -147,7 +228,17 @@ cdef class PyFrontPanel:
 
     def close(self):
         self.c_okfp.Close()
-    
+
+    def get_device_count(self):
+        cdef int cnt = self.c_okfp.GetDeviceCount()
+        return cnt
+
+    def get_device_info(self):
+        cdef okTDeviceInfo info
+        cdef int err_code = self.c_okfp.GetDeviceInfo(&info)
+        self.check_error(err_code)
+        return convert_TDeviceInfo(&info)
+        
     def load_default_pll_configuration(self):
         cdef int err_code = self.c_okfp.LoadDefaultPLLConfiguration()
         self.check_error(err_code)
