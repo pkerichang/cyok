@@ -76,15 +76,15 @@ cdef extern from "okFrontPanelDLL.h":
 
         void SetTimeout(int timeout)
         ErrorCode SetWireInValue(int ep, unsigned int val, unsigned int mask)
-        ErrorCode UpdateTriggerOuts()
-        ErrorCode UpdateWireIns()
-        ErrorCode UpdateWireOuts()
+        void UpdateTriggerOuts()
+        void UpdateWireIns()
+        void UpdateWireOuts()
         ErrorCode FlashEraseSector(unsigned int address)
         ErrorCode FlashWrite(unsigned int address, unsigned int length, const unsigned char * buf)
         ErrorCode FlashRead(unsigned int address, unsigned int length, unsigned int * buf)
         ErrorCode WriteRegister(unsigned int addr, unsigned int data)
-        long WriteToBlockPipeIn(int epAddr, int blockSize, long length, const unsigned char * data)
-        long WriteToPipeIn(int epAddr, long length, const unsigned char * data)
+        long WriteToBlockPipeIn(int epAddr, int blockSize, long length, unsigned char * data)
+        long WriteToPipeIn(int epAddr, long length, unsigned char * data)
 
         
         @staticmethod
@@ -210,21 +210,17 @@ cdef class PyFrontPanel:
         return err_code
     
     def update_trigger_outs(self):
-        cdef int err_code = self.c_okfp.UpdateTriggerOuts()
-        return err_code
+        self.c_okfp.UpdateTriggerOuts()
     
     def update_wire_ins(self):
-        cdef int err_code = self.c_okfp.UpdateWireIns()
-        return err_code
+        self.c_okfp.UpdateWireIns()
 
     def update_wire_outs(self):
-        cdef int err_code = self.c_okfp.UpdateWireOuts()
-        return err_code
+        self.c_okfp.UpdateWireOuts()
 
     def write_to_block_pipe_in(self, int ep_addr, int block_size, object arr):
         cdef long length = len(arr)
-        cdef int err_code = self.c_okfp.WriteToBlockPipeIn(ep_addr, block_size, length,
-                                                           arr.data.as_uchars)
+        cdef int err_code = self.c_okfp.WriteToBlockPipeIn(ep_addr, block_size, length, arr.data.as_uchars)
         return err_code
 
     def write_to_pipe_in(self, int ep_addr, object arr):
