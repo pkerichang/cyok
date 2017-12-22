@@ -321,13 +321,15 @@ cdef class PyFrontPanel:
     def update_wire_outs(self):
         self.c_okfp.UpdateWireOuts()
 
-    def write_to_block_pipe_in(self, int ep_addr, int block_size, object arr):
-        cdef long length = len(arr)
+    def write_to_block_pipe_in(self, int ep_addr, int block_size, object data_list):
+        cdef long length = len(data_list)
+        cdef array.array arr = array.array('B', data_list)
         cdef int err_code = self.c_okfp.WriteToBlockPipeIn(ep_addr, block_size, length, arr.data.as_uchars)
         return err_code
 
-    def write_to_pipe_in(self, int ep_addr, object arr):
-        cdef long length = len(arr)
+    def write_to_pipe_in(self, int ep_addr, object data_list):
+        cdef long length = len(data_list)
+        cdef array.array arr = array.array('B', data_list)
         cdef int err_code = self.c_okfp.WriteToPipeIn(ep_addr, length, arr.data.as_uchars)
         return err_code
         
